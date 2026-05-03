@@ -16,7 +16,7 @@ jobs:
         uses: NuGet/setup-nuget@v2
 
       - name: Restore Packages
-        run: nuget restore CRM.RCRC.sln
+        run: nuget restore CRM.RCRC.slnx
 
       - name: Build
         run: msbuild YourSolution.sln /p:Configuration=Release
