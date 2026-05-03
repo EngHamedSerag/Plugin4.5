@@ -26,14 +26,14 @@ jobs:
       - name: Build
         run: msbuild CRM.RCRC.slnx /t:Clean,Build /p:Configuration=Release /p:Platform="Any CPU"
 
-      - name: Show output files
+      - name: Show release output files
         if: always()
-        run: dir -Recurse -Filter *.dll
+        run: dir CRM.RCRC\bin\Release
 
-      - name: Upload DLL
+      - name: Upload Merged DLL
         uses: actions/upload-artifact@v4
         with:
           name: CRM-RCRC-plugin-build
           path: |
-            **\bin\Release\*.dll
-            **\bin\Release\*.pdb
+            CRM.RCRC\bin\Release\CRM.RCRC.Merged.dll
+            CRM.RCRC\bin\Release\CRM.RCRC.pdb
