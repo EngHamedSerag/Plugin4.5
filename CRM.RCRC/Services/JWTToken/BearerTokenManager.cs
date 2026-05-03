@@ -248,7 +248,7 @@ namespace RCRC.CRM.Plugins.Services
             {
                 if (unixSeconds >= 1000000000)
                 {
-                    expiryUtc = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).UtcDateTime;
+                    expiryUtc = FromUnixTimeSecondsCompat(unixSeconds).UtcDateTime;
                     return true;
                 }
 
@@ -268,6 +268,11 @@ namespace RCRC.CRM.Plugins.Services
             }
 
             return false;
+        }
+
+        private static DateTimeOffset FromUnixTimeSecondsCompat(long seconds)
+        {
+            return new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero).AddSeconds(seconds);
         }
 
         private static void EnsureTls12()
