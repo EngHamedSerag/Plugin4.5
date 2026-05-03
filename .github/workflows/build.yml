@@ -30,10 +30,10 @@ jobs:
         if: always()
         run: dir CRM.RCRC\bin\Release
 
-      - name: Upload Merged DLL
+      - name: Upload Plugin DLL
         uses: actions/upload-artifact@v4
         with:
           name: CRM-RCRC-plugin-build
           path: |
-            CRM.RCRC\bin\Release\CRM.RCRC.Merged.dll
+            CRM.RCRC\bin\Release\CRM.RCRC.dll
             CRM.RCRC\bin\Release\CRM.RCRC.pdb
