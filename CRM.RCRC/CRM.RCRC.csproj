@@ -134,6 +134,8 @@
   <PropertyGroup>
   <PostBuildEvent>if exist "$(TargetDir)$(TargetName).Merged.dll" del "$(TargetDir)$(TargetName).Merged.dll"
 
-"$(SolutionDir)packages\ILMerge.3.0.41\tools\net452\ILMerge.exe" /targetplatform:v4,"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5.2" /target:library /keyfile:"$(ProjectDir)strongkeyname.snk" /out:"$(TargetDir)$(TargetName).Merged.dll" "$(TargetPath)" "$(TargetDir)Newtonsoft.Json.dll"</PostBuildEvent>
+"$(SolutionDir)packages\ILMerge.3.0.41\tools\net452\ILMerge.exe" /targetplatform:v4,"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5.2" /target:library /keyfile:"$(ProjectDir)strongkeyname.snk" /lib:"$(SolutionDir)packages\Microsoft.CrmSdk.CoreAssemblies.9.0.2.5\lib\net452" /lib:"$(SolutionDir)packages\Microsoft.CrmSdk.Workflow.9.0.2.5\lib\net452" /lib:"$(TargetDir)" /out:"$(TargetDir)$(TargetName).Merged.dll" "$(TargetPath)" "$(TargetDir)Newtonsoft.Json.dll"
+
+if exist "$(TargetDir)$(TargetName).Merged.dll" copy /Y "$(TargetDir)$(TargetName).Merged.dll" "$(TargetDir)$(TargetName).dll"</PostBuildEvent>
 </PropertyGroup>
 </Project>
