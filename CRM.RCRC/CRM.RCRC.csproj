@@ -131,13 +131,11 @@
     <Error Condition="!Exists('..\packages\ILMerge.3.0.41\build\ILMerge.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ILMerge.3.0.41\build\ILMerge.props'))" />
   </Target>
 
-  <PropertyGroup>
 <PropertyGroup>
   <PostBuildEvent>copy /Y "$(TargetPath)" "$(TargetDir)$(TargetName).original.dll"
 
 "$(SolutionDir)packages\ILMerge.3.0.41\tools\net452\ILMerge.exe" /targetplatform:v4,"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.5.2" /target:library /keyfile:"$(ProjectDir)strongkeyname.snk" /lib:"$(SolutionDir)packages\Microsoft.CrmSdk.CoreAssemblies.9.0.2.5\lib\net452" /lib:"$(SolutionDir)packages\Microsoft.CrmSdk.Workflow.9.0.2.5\lib\net452" /out:"$(TargetPath)" "$(TargetDir)$(TargetName).original.dll" "$(TargetDir)Newtonsoft.Json.dll"
 
 del "$(TargetDir)$(TargetName).original.dll"</PostBuildEvent>
-</PropertyGroup>
 </PropertyGroup>
 </Project>
