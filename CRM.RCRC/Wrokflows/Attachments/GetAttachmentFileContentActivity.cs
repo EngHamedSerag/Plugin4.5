@@ -1,11 +1,11 @@
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 using Microsoft.Xrm.Sdk.Workflow;
-using RCRC.CRM.Plugins.Services;
+using CRM.Generic.Plugins.Services;
 using System;
 using System.Activities;
 
-namespace RCRC.CRM.WorkflowActivities.Attachments
+namespace CRM.Generic.WorkflowActivities.Attachments
 {
     public class GetAttachmentFileContentActivity : CodeActivity
     {
