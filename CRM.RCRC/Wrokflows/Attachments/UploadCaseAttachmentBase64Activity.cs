@@ -36,6 +36,9 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
         [Input("Content Type")]
         public InArgument<string> ContentType { get; set; }
 
+        [Input("Attachment Type")]
+        public InArgument<string> AttachmentType { get; set; }
+
         [Output("Success")]
         public OutArgument<bool> Success { get; set; }
 
@@ -68,6 +71,7 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
                 var base64FileContent = Base64FileContent.Get(executionContext);
                 var fileDescription = FileDescription.Get(executionContext);
                 var contentType = ContentType.Get(executionContext);
+                var attchType = AttachmentType.Get(executionContext);
 
                 if (caseReference == null || caseReference.Id == Guid.Empty)
                     throw new InvalidPluginExecutionException("Case is required and must contain a valid incident reference.");
@@ -77,6 +81,11 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
 
                 if (string.IsNullOrWhiteSpace(base64FileContent))
                     throw new InvalidPluginExecutionException("Base64 File Content is required.");
+
+                if (string.IsNullOrWhiteSpace(attchType))
+                    attchType = "0";
+
+                Int32.TryParse(attchType, out int attchmentType);
 
                 if (string.IsNullOrWhiteSpace(contentType))
                     contentType = "application/octet-stream";
@@ -99,7 +108,8 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
                         FileName = fileName,
                         Base64Content = base64FileContent,
                         FileDescription = fileDescription,
-                        ContentType = contentType
+                        ContentType = contentType,
+                        AttachmentType = attchmentType
                     }
                 };
 
