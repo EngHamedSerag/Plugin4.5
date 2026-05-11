@@ -343,5 +343,6 @@ namespace RCRC.CRM.Plugins.Services
         public string Base64Content { get; set; }
         public string FileDescription { get; set; }
         public string ContentType { get; set; }
+        public int AttachmentType { get; set; }
     }
 }
