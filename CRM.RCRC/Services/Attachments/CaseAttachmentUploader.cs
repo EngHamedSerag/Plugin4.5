@@ -25,21 +25,27 @@ namespace RCRC.CRM.Plugins.Services
             _baseUrl = baseUrl.TrimEnd('/');
             _tokenManager = tokenManager;
         }
-
         public async Task<EndpointResponse<List<Guid>>> UploadAttachmentComplainAsync(
-            Guid caseId,
-            List<UploadAttachmentFile> files)
+    int entityoption,
+    string recordid,
+    List<UploadAttachmentFile> files)
         {
-            if (caseId == Guid.Empty)
-                throw new ArgumentException("Case ID is required.", nameof(caseId));
-
             if (files == null || files.Count == 0)
                 throw new ArgumentException("At least one file is required.", nameof(files));
+
+            if (string.IsNullOrWhiteSpace(recordid))
+                throw new ArgumentException("Record ID is required.", nameof(recordid));
 
             EnsureTls12();
 
             var token = await _tokenManager.GetTokenAsync().ConfigureAwait(false);
-            var requestUrl = _baseUrl + "/api/Attachment/AddAttachmentComplain?caseID=" + caseId;
+
+            var requestUrl =
+                _baseUrl.TrimEnd('/') +
+                "/api/Attachment/AddAttachmentComplain?recordID=" +
+                Uri.EscapeDataString(recordid) +
+                "&attachmentRelatedEntity=" +
+                Uri.EscapeDataString(entityoption.ToString());
 
             using (var client = new HttpClient())
             using (var form = new MultipartFormDataContent())
@@ -47,6 +53,7 @@ namespace RCRC.CRM.Plugins.Services
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(
                     new MediaTypeWithQualityHeaderValue("application/json"));
+
                 client.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Bearer", token);
 
@@ -73,19 +80,53 @@ namespace RCRC.CRM.Plugins.Services
                             nameof(files));
                     }
 
+                    if (file.attachmentType <= 0)
+                    {
+                        throw new ArgumentException(
+                            "Attachment type is required for file '" + file.FileName + "'.",
+                            nameof(files));
+                    }
+
                     var fileBytes = ConvertBase64ToBytes(file.Base64Content, file.FileName);
                     var fileContent = new ByteArrayContent(fileBytes);
+
                     var contentType = string.IsNullOrWhiteSpace(file.ContentType)
                         ? "application/octet-stream"
                         : file.ContentType.Trim();
 
                     fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
 
+                    /*
+                     * Keep this as file0, file1, file2 because your current API most likely loops
+                     * through httpRequest.Files by index.
+                     */
                     form.Add(fileContent, "file" + i, file.FileName);
+
+                    /*
+                     * Required by API:
+                     * httpRequest.Form[$"attachments[{fileIndex}].attachmentType"]
+                     */
+                    form.Add(
+                        new StringContent(file.attachmentType.ToString()),
+                        "attachments[" + i + "].attachmentType");
+
+                    /*
+                     * Optional but useful if the API reads per-file descriptions.
+                     */
+                    form.Add(
+                        new StringContent(file.FileDescription ?? string.Empty),
+                        "attachments[" + i + "].fileDescription");
+
                     descriptions.Add(file.FileDescription ?? string.Empty);
                 }
 
-                form.Add(new StringContent(string.Join(",", descriptions)), "FileDescription");
+                /*
+                 * Keep this because your previous code was already sending FileDescription.
+                 * Some APIs expect this general field instead of per-file description.
+                 */
+                form.Add(
+                    new StringContent(string.Join(",", descriptions)),
+                    "FileDescription");
 
                 HttpResponseMessage response;
 
@@ -114,17 +155,19 @@ namespace RCRC.CRM.Plugins.Services
                 {
                     throw new InvalidOperationException(
                         string.Format(
-                            "Attachment upload failed. Status code: {0} ({1}). Response body: {2}",
+                            "Attachment upload failed. Status code: {0} ({1}). URL: {2}. Response body: {3}",
                             (int)response.StatusCode,
                             response.ReasonPhrase,
+                            requestUrl,
                             responseBody));
                 }
 
                 var result = JsonConvert.DeserializeObject<EndpointResponse<List<Guid>>>(responseBody);
+
                 if (result == null)
                 {
                     throw new InvalidOperationException(
-                        "Attachment upload succeeded but the response body could not be deserialized.");
+                        "Attachment upload succeeded but the response body could not be deserialized. Body: " + responseBody);
                 }
 
                 return result;
@@ -343,6 +386,6 @@ namespace RCRC.CRM.Plugins.Services
         public string Base64Content { get; set; }
         public string FileDescription { get; set; }
         public string ContentType { get; set; }
-        public int AttachmentType { get; set; }
+        public int attachmentType { get; set; }
     }
 }
