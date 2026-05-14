@@ -11,62 +11,55 @@ namespace CRM.WorkflowActivities
 {
     public class SyncCaseQuestionnaireFromAnswers : CodeActivity
     {
-        // ============================================================
-        // CHANGE THESE BASED ON YOUR ACTUAL CRM SCHEMA
-        // ============================================================
-
         private const string CaseEntityName = "incident";
 
         // Field on Case
         private const string CaseQuestionnaireField = "crm2p_questionnaire";
 
-        // Child Answer entity
+        // Answer entity
         private const string AnswerEntityName = "crm2p_answer";
 
-        // Lookup from Answer entity to Case
+        // Answer fields
+        private const string AnswerPrimaryIdField = "crm2p_answerid";
         private const string AnswerCaseLookup = "crm2p_case";
-
-        // Lookup from Answer entity to Question
         private const string AnswerQuestionLookup = "crm2p_question";
 
-        // Text/value field on Answer entity
-        private const string AnswerValueField = "crm2p_answer";
+        // Based on your OData sample, the actual answer value is stored in crm2p_name
+        private const string AnswerNameField = "crm2p_name";
 
-        // Optional ordering field if available.
-        // If you do not have this field, leave it null.
-        private const string AnswerOrderField = null;
-        // Example:
-        // private const string AnswerOrderField = "createdon";
+        // Optional, kept as fallback
+        private const string AnswerValueField = "crm2p_value";
 
-        // Separator format
+        private const string QuestionEntityName = "crm2p_question";
+
         private const string QuestionSeparator = "###";
         private const string AnswerSeparator = "$$$";
 
         protected override void Execute(CodeActivityContext executionContext)
         {
-            ITracingService tracingService =
+            ITracingService tracing =
                 executionContext.GetExtension<ITracingService>();
 
-            IWorkflowContext workflowContext =
+            IWorkflowContext context =
                 executionContext.GetExtension<IWorkflowContext>();
 
             IOrganizationServiceFactory serviceFactory =
                 executionContext.GetExtension<IOrganizationServiceFactory>();
 
             IOrganizationService service =
-                serviceFactory.CreateOrganizationService(workflowContext.UserId);
+                serviceFactory.CreateOrganizationService(context.UserId);
 
             try
             {
-                if (!string.Equals(workflowContext.PrimaryEntityName, CaseEntityName, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(context.PrimaryEntityName, CaseEntityName, StringComparison.OrdinalIgnoreCase))
                 {
-                    tracingService.Trace("This workflow activity must run on incident/case.");
+                    tracing.Trace("This activity must run on incident. Current entity: {0}", context.PrimaryEntityName);
                     return;
                 }
 
-                Guid caseId = workflowContext.PrimaryEntityId;
+                Guid caseId = context.PrimaryEntityId;
 
-                tracingService.Trace("Starting questionnaire sync for case: {0}", caseId);
+                tracing.Trace("Starting questionnaire sync for case: {0}", caseId);
 
                 Entity caseRecord = service.Retrieve(
                     CaseEntityName,
@@ -74,35 +67,33 @@ namespace CRM.WorkflowActivities
                     new ColumnSet(CaseQuestionnaireField)
                 );
 
-                string questionnaireValue = GetString(caseRecord, CaseQuestionnaireField);
+                string questionnaire = GetString(caseRecord, CaseQuestionnaireField);
 
-                List<Entity> existingAnswers = RetrieveCaseAnswers(service, caseId, tracingService);
+                List<Entity> answers = RetrieveCaseAnswers(service, caseId, tracing);
 
-                bool questionnaireIsEmpty = string.IsNullOrWhiteSpace(questionnaireValue);
-                bool answersExist = existingAnswers != null && existingAnswers.Count > 0;
+                bool questionnaireIsEmpty = string.IsNullOrWhiteSpace(questionnaire);
+                bool answersExist = answers.Count > 0;
 
-                tracingService.Trace("Questionnaire empty: {0}", questionnaireIsEmpty);
-                tracingService.Trace("Existing answers count: {0}", existingAnswers.Count);
+                tracing.Trace("Questionnaire empty: {0}", questionnaireIsEmpty);
+                tracing.Trace("Answers exist: {0}", answersExist);
+                tracing.Trace("Answer count: {0}", answers.Count);
 
                 if (questionnaireIsEmpty && answersExist)
                 {
-                    tracingService.Trace("Questionnaire is empty and answers exist. Building questionnaire from answers.");
+                    tracing.Trace("Building crm2p_questionnaire from crm2p_answer records.");
 
-                    string preparedQuestionnaire = PrepareQuestionnaireFromAnswerRecords(existingAnswers, tracingService);
+                    string generatedQuestionnaire =
+                        PrepareQuestionnaireFromAnswers(answers, tracing);
 
-                    if (!string.IsNullOrWhiteSpace(preparedQuestionnaire))
+                    if (!string.IsNullOrWhiteSpace(generatedQuestionnaire))
                     {
                         Entity updateCase = new Entity(CaseEntityName);
                         updateCase.Id = caseId;
-                        updateCase[CaseQuestionnaireField] = preparedQuestionnaire;
+                        updateCase[CaseQuestionnaireField] = generatedQuestionnaire;
 
                         service.Update(updateCase);
 
-                        tracingService.Trace("Case questionnaire updated successfully.");
-                    }
-                    else
-                    {
-                        tracingService.Trace("Prepared questionnaire is empty. No update done.");
+                        tracing.Trace("Case crm2p_questionnaire updated.");
                     }
 
                     return;
@@ -110,29 +101,30 @@ namespace CRM.WorkflowActivities
 
                 if (!questionnaireIsEmpty && !answersExist)
                 {
-                    tracingService.Trace("Questionnaire is filled and no answers exist. Creating answers from questionnaire.");
+                    tracing.Trace("Creating crm2p_answer records from crm2p_questionnaire.");
 
-                    List<QuestionnaireAnswerItem> parsedAnswers =
-                        ParseQuestionnaire(questionnaireValue, tracingService);
+                    List<QuestionnaireAnswerItem> parsedItems =
+                        ParseQuestionnaire(questionnaire, tracing);
 
-                    tracingService.Trace("Parsed answer items count: {0}", parsedAnswers.Count);
+                    tracing.Trace("Parsed answer items: {0}", parsedItems.Count);
 
-                    foreach (QuestionnaireAnswerItem item in parsedAnswers)
+                    foreach (QuestionnaireAnswerItem item in parsedItems)
                     {
-                        CreateAnswerRecord(service, caseId, item, tracingService);
+                        CreateAnswer(service, caseId, item, tracing);
                     }
 
-                    tracingService.Trace("Answer records created successfully.");
+                    tracing.Trace("Answer creation completed.");
                     return;
                 }
 
-                tracingService.Trace("No action needed.");
+                tracing.Trace("No sync needed.");
             }
             catch (Exception ex)
             {
-                tracingService.Trace("SyncCaseQuestionnaireFromAnswers failed: {0}", ex.ToString());
+                tracing.Trace("SyncCaseQuestionnaireFromAnswers failed: {0}", ex.ToString());
+
                 throw new InvalidPluginExecutionException(
-                    "Failed to sync case questionnaire and answers: " + ex.Message,
+                    "Failed to sync questionnaire and answers: " + ex.Message,
                     ex
                 );
             }
@@ -141,13 +133,17 @@ namespace CRM.WorkflowActivities
         private static List<Entity> RetrieveCaseAnswers(
             IOrganizationService service,
             Guid caseId,
-            ITracingService tracingService)
+            ITracingService tracing)
         {
             QueryExpression query = new QueryExpression(AnswerEntityName)
             {
                 ColumnSet = new ColumnSet(
+                    AnswerPrimaryIdField,
+                    AnswerCaseLookup,
                     AnswerQuestionLookup,
-                    AnswerValueField
+                    AnswerNameField,
+                    AnswerValueField,
+                    "createdon"
                 )
             };
 
@@ -157,72 +153,66 @@ namespace CRM.WorkflowActivities
                 caseId
             );
 
-            if (!string.IsNullOrWhiteSpace(AnswerOrderField))
-            {
-                query.Orders.Add(new OrderExpression(AnswerOrderField, OrderType.Ascending));
-            }
+            query.Orders.Add(new OrderExpression("createdon", OrderType.Ascending));
 
             EntityCollection result = service.RetrieveMultiple(query);
 
-            tracingService.Trace("Retrieved answers count: {0}", result.Entities.Count);
+            tracing.Trace("Retrieved crm2p_answer count: {0}", result.Entities.Count);
 
             return result.Entities.ToList();
         }
 
-        private static string PrepareQuestionnaireFromAnswerRecords(
+        private static string PrepareQuestionnaireFromAnswers(
             List<Entity> answerRecords,
-            ITracingService tracingService)
+            ITracingService tracing)
         {
             /*
-             * Output format:
+             * Final format:
              *
              * questionId$$$answer
              * questionId$$$answer1$$$answer2
-             *
-             * Records are grouped by question.
-             * If the same question has multiple answer records,
-             * they become a multi-answer segment.
+             * questionId$$$answer###questionId2$$$answer
              */
 
-            Dictionary<Guid, List<string>> groupedAnswers =
+            Dictionary<Guid, List<string>> grouped =
                 new Dictionary<Guid, List<string>>();
 
-            foreach (Entity answerRecord in answerRecords)
+            foreach (Entity answer in answerRecords)
             {
-                EntityReference questionRef = GetEntityReference(answerRecord, AnswerQuestionLookup);
+                EntityReference questionRef = GetEntityReference(answer, AnswerQuestionLookup);
 
                 if (questionRef == null)
                 {
-                    tracingService.Trace("Skipping answer record {0}. Missing question lookup.", answerRecord.Id);
+                    tracing.Trace("Skipping crm2p_answer {0}. Missing crm2p_question.", answer.Id);
                     continue;
                 }
 
-                string answerValue = GetAnswerValueAsString(answerRecord, AnswerValueField);
+                string answerValue = GetAnswerText(answer);
 
-                if (!groupedAnswers.ContainsKey(questionRef.Id))
+                if (!grouped.ContainsKey(questionRef.Id))
                 {
-                    groupedAnswers[questionRef.Id] = new List<string>();
+                    grouped[questionRef.Id] = new List<string>();
                 }
 
-                groupedAnswers[questionRef.Id].Add(answerValue);
+                grouped[questionRef.Id].Add(answerValue);
             }
 
             StringBuilder result = new StringBuilder();
             int count = 0;
 
-            foreach (KeyValuePair<Guid, List<string>> questionGroup in groupedAnswers)
+            foreach (KeyValuePair<Guid, List<string>> item in grouped)
             {
                 if (count > 0)
                 {
                     result.Append(QuestionSeparator);
                 }
 
-                result.Append(questionGroup.Key.ToString());
+                result.Append(item.Key.ToString());
 
-                foreach (string answer in questionGroup.Value)
+                foreach (string answerValue in item.Value)
                 {
                     result.Append(AnswerSeparator);
-                    result.Append(answer ?? string.Empty);
+                    result.Append(answerValue ?? string.Empty);
                 }
 
                 count++;
@@ -233,17 +223,8 @@ namespace CRM.WorkflowActivities
 
         private static List<QuestionnaireAnswerItem> ParseQuestionnaire(
             string questionnaire,
-            ITracingService tracingService)
+            ITracingService tracing)
         {
-            /*
-             * Input examples:
-             *
-             * qid$$$answer
-             * qid$$$answer1$$$answer2
-             * qid$$$
-             * qid$$$value###qid2$$$value2
-             */
-
             List<QuestionnaireAnswerItem> result =
                 new List<QuestionnaireAnswerItem>();
 
@@ -259,11 +240,6 @@ namespace CRM.WorkflowActivities
 
             foreach (string block in questionBlocks)
             {
-                if (string.IsNullOrWhiteSpace(block))
-                {
-                    continue;
-                }
-
                 string[] parts = block.Split(
                     new string[] { AnswerSeparator },
                     StringSplitOptions.None
@@ -271,7 +247,7 @@ namespace CRM.WorkflowActivities
 
                 if (parts.Length < 2)
                 {
-                    tracingService.Trace("Skipping invalid questionnaire block: {0}", block);
+                    tracing.Trace("Skipping invalid questionnaire block: {0}", block);
                     continue;
                 }
 
@@ -279,72 +255,89 @@ namespace CRM.WorkflowActivities
 
                 if (!Guid.TryParse(parts[0], out questionId))
                 {
-                    tracingService.Trace("Skipping block with invalid question ID: {0}", parts[0]);
+                    tracing.Trace("Skipping block with invalid question id: {0}", parts[0]);
                     continue;
                 }
 
                 for (int i = 1; i < parts.Length; i++)
                 {
-                    string answerValue = parts[i];
-
-                    QuestionnaireAnswerItem item = new QuestionnaireAnswerItem
+                    result.Add(new QuestionnaireAnswerItem
                     {
                         QuestionId = questionId,
-                        AnswerValue = answerValue
-                    };
-
-                    result.Add(item);
+                        AnswerValue = parts[i] ?? string.Empty
+                    });
                 }
             }
 
             return result;
         }
 
-        private static void CreateAnswerRecord(
+        private static void CreateAnswer(
             IOrganizationService service,
             Guid caseId,
             QuestionnaireAnswerItem item,
-            ITracingService tracingService)
+            ITracingService tracing)
         {
             Entity answer = new Entity(AnswerEntityName);
 
-            answer[AnswerCaseLookup] = new EntityReference(CaseEntityName, caseId);
-            answer[AnswerQuestionLookup] = new EntityReference("crm2p_question", item.QuestionId);
+            answer[AnswerCaseLookup] =
+                new EntityReference(CaseEntityName, caseId);
+
+            answer[AnswerQuestionLookup] =
+                new EntityReference(QuestionEntityName, item.QuestionId);
+
+            // Based on your OData sample:
+            // crm2p_name contains the actual answer text.
+            answer[AnswerNameField] = item.AnswerValue ?? string.Empty;
+
+            // Optional: also fill crm2p_value if your forms/API expect it.
+            // Keep this enabled if crm2p_value is text.
             answer[AnswerValueField] = item.AnswerValue ?? string.Empty;
 
-            Guid answerId = service.Create(answer);
+            Guid createdId = service.Create(answer);
 
-            tracingService.Trace(
-                "Created answer record {0}. Question: {1}, Value: {2}",
-                answerId,
+            tracing.Trace(
+                "Created crm2p_answer {0}. Question: {1}. Value: {2}",
+                createdId,
                 item.QuestionId,
                 item.AnswerValue
             );
         }
 
+        private static string GetAnswerText(Entity answer)
+        {
+            /*
+             * Your sample shows crm2p_name = "0534119084"
+             * and crm2p_value = null.
+             *
+             * So priority:
+             * 1. crm2p_name
+             * 2. crm2p_value
+             */
+
+            string name = GetString(answer, AnswerNameField);
+
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            return GetString(answer, AnswerValueField);
+        }
+
         private static string GetString(Entity entity, string attributeName)
         {
-            if (entity == null || !entity.Contains(attributeName) || entity[attributeName] == null)
+            if (entity == null)
             {
                 return string.Empty;
             }
 
-            return entity[attributeName].ToString();
-        }
-
-        private static EntityReference GetEntityReference(Entity entity, string attributeName)
-        {
-            if (entity == null || !entity.Contains(attributeName) || entity[attributeName] == null)
+            if (!entity.Contains(attributeName))
             {
-                return null;
+                return string.Empty;
             }
 
-            return entity[attributeName] as EntityReference;
-        }
-
-        private static string GetAnswerValueAsString(Entity entity, string attributeName)
-        {
-            if (entity == null || !entity.Contains(attributeName) || entity[attributeName] == null)
+            if (entity[attributeName] == null)
             {
                 return string.Empty;
             }
@@ -377,6 +370,21 @@ namespace CRM.WorkflowActivities
             }
 
             return value.ToString();
+        }
+
+        private static EntityReference GetEntityReference(Entity entity, string attributeName)
+        {
+            if (entity == null)
+            {
+                return null;
+            }
+
+            if (!entity.Contains(attributeName))
+            {
+                return null;
+            }
+
+            return entity[attributeName] as EntityReference;
         }
 
         private class QuestionnaireAnswerItem
