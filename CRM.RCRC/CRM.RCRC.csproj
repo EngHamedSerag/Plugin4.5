@@ -105,6 +105,7 @@
     <Compile Include="Services\JWTToken\BearerTokenManager.cs" />
     <Compile Include="Wrokflows\Attachments\GetAttachmentFileContentActivity.cs" />
     <Compile Include="Wrokflows\Attachments\UploadCaseAttachmentBase64Activity.cs" />
+    <Compile Include="Wrokflows\Attachments\FillQuestionnaire.cs" />
     <Compile Include="Wrokflows\WrokflowHelpers\GetSystemConfigurationValue.cs" />
     <Compile Include="Wrokflows\WrokflowHelpers\GetTeamCachedEmails.cs" />
   </ItemGroup>
