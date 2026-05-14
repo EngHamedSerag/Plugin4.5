@@ -18,14 +18,14 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
         private const string AttachmentApiPasswordConfigurationName = "ATTACHMENT_API_PASSWORD";
 
         [RequiredArgument]
-        [Input("Case")]
-        [ReferenceTarget("incident")]
-        public InArgument<EntityReference> Case { get; set; }
+        [Input("RequiredEntity")]
+        public InArgument<int> RequiredEntity { get; set; }
 
         [RequiredArgument]
+        [Input("RequiredRecordId")]
+        public InArgument<string> RequiredRecordID { get; set; }
         [Input("File Name")]
         public InArgument<string> FileName { get; set; }
-
         [RequiredArgument]
         [Input("Base64 File Content")]
         public InArgument<string> Base64FileContent { get; set; }
@@ -66,15 +66,16 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
             {
                 Trace(tracingService, "UploadCaseAttachmentBase64Activity started.");
 
-                var caseReference = Case.Get(executionContext);
+                var reqEntity = RequiredEntity.Get(executionContext);
+                var reqRecordId = RequiredRecordID.Get(executionContext);
                 var fileName = FileName.Get(executionContext);
                 var base64FileContent = Base64FileContent.Get(executionContext);
                 var fileDescription = FileDescription.Get(executionContext);
                 var contentType = ContentType.Get(executionContext);
                 var attchType = AttachmentType.Get(executionContext);
 
-                if (caseReference == null || caseReference.Id == Guid.Empty)
-                    throw new InvalidPluginExecutionException("Case is required and must contain a valid incident reference.");
+                if (string.IsNullOrWhiteSpace(reqRecordId))
+                    throw new InvalidPluginExecutionException("Record ID is required.");
 
                 if (string.IsNullOrWhiteSpace(fileName))
                     throw new InvalidPluginExecutionException("File Name is required.");
@@ -83,7 +84,7 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
                     throw new InvalidPluginExecutionException("Base64 File Content is required.");
 
                 if (string.IsNullOrWhiteSpace(attchType))
-                    attchType = "0";
+                    attchType = "125160002";
 
                 Int32.TryParse(attchType, out int attchmentType);
 
@@ -97,7 +98,8 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
                 var password = GetSystemConfigurationValue(service, AttachmentApiPasswordConfigurationName);
 
                 Trace(tracingService, "Attachment API configuration loaded.");
-                Trace(tracingService, "Uploading attachment for case ID: {0}", caseReference.Id);
+                Trace(tracingService, "Uploading attachment for Entity: {0}", reqEntity);
+                Trace(tracingService, "Uploading attachment for Record: {0}", reqRecordId);
 
                 var tokenManager = new BearerTokenManager(baseUrl, username, password);
                 var uploader = new CaseAttachmentUploader(baseUrl, tokenManager);
@@ -109,12 +111,12 @@ namespace RCRC.CRM.WorkflowActivities.Attachments
                         Base64Content = base64FileContent,
                         FileDescription = fileDescription,
                         ContentType = contentType,
-                        AttachmentType = attchmentType
+                        attachmentType = 125160002
                     }
                 };
 
                 var result = uploader
-                    .UploadAttachmentComplainAsync(caseReference.Id, files)
+                    .UploadAttachmentComplainAsync(reqEntity, reqRecordId, files)
                     .GetAwaiter()
                     .GetResult();
 
