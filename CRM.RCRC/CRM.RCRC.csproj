@@ -108,6 +108,7 @@
     <Compile Include="Wrokflows\Attachments\FillQuestionnaire.cs" />
     <Compile Include="Wrokflows\WrokflowHelpers\GetSystemConfigurationValue.cs" />
     <Compile Include="Wrokflows\WrokflowHelpers\GetTeamCachedEmails.cs" />
+    <Compile Include="Wrokflows\Notifications\SendSMS.cs" />
   </ItemGroup>
 
   <ItemGroup>
